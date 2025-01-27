@@ -8,32 +8,58 @@
 'use strict';
 
 const path = require('path');
-const spawn = require('child_process').spawn;
+const {spawn} = require('child_process');
 
-const extension = process.platform === 'win32' ? '.cmd' : '';
+/**
+ * Get the platform-specific path for the `danger-ci` binary
+ * @returns {string} - Path to danger-ci executable
+ */
+const getDangerPath = () =>
+    path.join('node_modules', '.bin', `danger-ci${process.platform === 'win32' ? '.cmd' : ''}`);
 
-// sizebot public_repo token (this is publicly visible on purpose)
-const token = 'ghp_UfuUaoow8veN3ZV1' + 'sGquTDgiVjRDmL2qLY1D';
-spawn(
-  path.join('node_modules', '.bin', 'danger-ci' + extension),
-  [
-    '--id',
-    process.env.RELEASE_CHANNEL === 'experimental' ? 'experimental' : 'stable',
-  ],
-  {
-    // Allow colors to pass through
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      DANGER_GITHUB_API_TOKEN: token,
-    },
-  }
-).on('close', function (code) {
-  if (code !== 0) {
-    console.error('Danger failed');
-  } else {
-    console.log('Danger passed');
-  }
+/**
+ * Determine the release channel
+ * @returns {string} - Either "experimental" or "stable"
+ */
+const getReleaseChannel = () =>
+    process.env.RELEASE_CHANNEL === 'experimental' ? 'experimental' : 'stable';
 
-  process.exit(code);
-});
+/**
+ * Retrieve the GitHub API token from environment variables
+ * @returns {string} - The GitHub token
+ */
+const getToken = () => {
+    const token = process.env.DANGER_GITHUB_API_TOKEN;
+    if (!token) {
+        console.error('DANGER_GITHUB_API_TOKEN is not set. Please provide a valid GitHub token.');
+        process.exit(1);
+    }
+    return token;
+};
+
+/**
+ * Run the Danger CI tool
+ */
+const runDanger = () => {
+    const dangerPath = getDangerPath();
+    const token = getToken();
+    const releaseChannel = getReleaseChannel();
+
+    spawn(dangerPath, ['--id', releaseChannel], {
+        stdio: 'inherit', // Allow colors and logs to pass through
+        env: {
+            ...process.env, // Keep existing environment variables
+            DANGER_GITHUB_API_TOKEN: token, // Add the GitHub token
+        },
+    }).on('close', (code) => {
+        if (code !== 0) {
+            console.error(`Danger failed with exit code ${code}`);
+        } else {
+            console.log('Danger passed successfully.');
+        }
+        process.exit(code);
+    });
+};
+
+// Run the script
+runDanger();
